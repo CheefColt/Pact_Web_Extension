@@ -281,7 +281,114 @@ styleSheet.textContent = `
     background: #2563eb;
 }`;
 
+// Add search styles to existing styleSheet
+styleSheet.textContent += `
+.search-container {
+    margin-bottom: 16px;
+    padding: 12px;
+    background: #f8fafc;
+    border-radius: 8px;
+}
+
+.search-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 14px;
+    outline: none;
+}
+
+.search-input:focus {
+    border-color: #3b82f6;
+}
+
+.highlight {
+    background-color: #fef08a;
+    padding: 2px;
+    border-radius: 2px;
+}
+
+.jump-links {
+    margin-top: 8px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.jump-link {
+    padding: 4px 8px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+}`;
+
+// Add to existing styles
+styleSheet.textContent += `
+.search-stats {
+    font-size: 12px;
+    color: #64748b;
+    margin-top: 4px;
+}
+
+.search-highlight {
+    background-color: #fef08a;
+    padding: 2px 0;
+}
+
+.search-highlight.active {
+    background-color:rgb(253, 114, 71);
+}
+
+.navigation-controls {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.nav-button {
+    padding: 4px 8px;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.nav-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}`;
+
+// Update search styles
+styleSheet.textContent += `
+.highlight {
+    background-color: #fef08a;
+    border-radius: 2px;
+    padding: 2px 4px;
+}
+
+.highlight.active {
+    background-color: #f97316;
+    color: white;
+}`;
+
 document.head.appendChild(styleSheet);
+
+// Add debounce utility
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
 
 // Create Overlay
 function createAnalyzerOverlay() {
@@ -292,6 +399,15 @@ function createAnalyzerOverlay() {
         <div class="header">
             <h2>Privacy Policy Analysis</h2>
             <button class="close-button">×</button>
+        </div>
+        <div class="search-container">
+            <input type="text" class="search-input" placeholder="Search in privacy policy...">
+            <div class="search-stats"></div>
+            <div class="navigation-controls">
+                <button class="nav-button prev-match" disabled>Previous</button>
+                <button class="nav-button next-match" disabled>Next</button>
+            </div>
+            <div class="jump-links"></div>
         </div>
         <div class="level-selector">
             <h3>Select Analysis Level</h3>
@@ -326,6 +442,108 @@ function createAnalyzerOverlay() {
             </div>
         </div>
     `;
+
+    // Add search state tracking
+    let searchState = {
+        matches: [],
+        currentIndex: -1,
+        query: ''
+    };
+
+    function performSearch(searchText) {
+        // Reset state
+        searchState = {
+            matches: [],
+            currentIndex: -1,
+            query: searchText
+        };
+
+        if (!searchText) {
+            clearHighlights();
+            updateUI();
+            return;
+        }
+
+        const content = overlay.querySelector('.analysis-content');
+        const allElements = content.querySelectorAll('p, li');
+        const searchRegex = new RegExp(escapeRegExp(searchText), 'gi');
+
+        allElements.forEach(element => {
+            const originalText = element.textContent;
+            if (searchRegex.test(originalText)) {
+                element.innerHTML = originalText.replace(searchRegex, match => 
+                    `<mark class="highlight">${match}</mark>`
+                );
+                searchState.matches.push(...element.querySelectorAll('.highlight'));
+            }
+        });
+
+        if (searchState.matches.length > 0) {
+            searchState.currentIndex = 0;
+            highlightCurrentMatch();
+        }
+
+        updateUI();
+    }
+
+    function escapeRegExp(string) {
+        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function clearHighlights() {
+        const highlights = overlay.querySelectorAll('.highlight');
+        highlights.forEach(highlight => {
+            const parent = highlight.parentNode;
+            parent.textContent = parent.textContent;
+        });
+    }
+
+    function highlightCurrentMatch() {
+        searchState.matches.forEach(match => match.classList.remove('active'));
+        const currentMatch = searchState.matches[searchState.currentIndex];
+        if (currentMatch) {
+            currentMatch.classList.add('active');
+            currentMatch.scrollIntoView({
+                behavior: 'smooth',
+                block: 'center'
+            });
+        }
+    }
+
+    function updateUI() {
+        const prevButton = overlay.querySelector('.prev-match');
+        const nextButton = overlay.querySelector('.next-match');
+        const statsDiv = overlay.querySelector('.search-stats');
+
+        prevButton.disabled = !searchState.matches.length || searchState.currentIndex <= 0;
+        nextButton.disabled = !searchState.matches.length || 
+            searchState.currentIndex >= searchState.matches.length - 1;
+
+        statsDiv.textContent = searchState.matches.length ? 
+            `${searchState.matches.length} matches (${searchState.currentIndex + 1}/${searchState.matches.length})` :
+            searchState.query ? 'No matches found' : '';
+    }
+
+    // Event Listeners
+    overlay.querySelector('.search-input').addEventListener('input', 
+        debounce(e => performSearch(e.target.value.trim()), 300)
+    );
+
+    overlay.querySelector('.prev-match').addEventListener('click', () => {
+        if (searchState.currentIndex > 0) {
+            searchState.currentIndex--;
+            highlightCurrentMatch();
+            updateUI();
+        }
+    });
+
+    overlay.querySelector('.next-match').addEventListener('click', () => {
+        if (searchState.currentIndex < searchState.matches.length - 1) {
+            searchState.currentIndex++;
+            highlightCurrentMatch();
+            updateUI();
+        }
+    });
 
     // Add chat handlers
     const chatInput = overlay.querySelector('.chat-input');
@@ -537,6 +755,51 @@ async function handleQuestionClick(question, answerSection) {
     } catch (error) {
         answerSection.innerHTML = '<p>Failed to get answer. Please try again.</p>';
     }
+}
+
+// Add search handler
+function handleSearch(query, overlay) {
+    const content = overlay.querySelector('.analysis-content');
+    const jumpLinks = overlay.querySelector('.jump-links');
+    
+    // Clear previous highlights and links
+    clearHighlights(overlay);
+    jumpLinks.innerHTML = '';
+    
+    if (!query) return;
+
+    const regex = new RegExp(query, 'gi');
+    const elements = content.querySelectorAll('p, li');
+    let matchCount = 0;
+    
+    elements.forEach((element, index) => {
+        const text = element.textContent;
+        if (regex.test(text)) {
+            element.innerHTML = text.replace(regex, match => 
+                `<mark class="highlight" id="match-${index}">${match}</mark>`
+            );
+            
+            // Create jump link
+            const section = element.closest('section');
+            if (section) {
+                const title = section.querySelector('h2').textContent;
+                const link = document.createElement('button');
+                link.className = 'jump-link';
+                link.textContent = `${title} (Match ${++matchCount})`;
+                link.onclick = () => document.getElementById(`match-${index}`)
+                    .scrollIntoView({ behavior: 'smooth' });
+                jumpLinks.appendChild(link);
+            }
+        }
+    });
+}
+
+function clearHighlights(overlay) {
+    const highlights = overlay.querySelectorAll('.highlight');
+    highlights.forEach(highlight => {
+        const parent = highlight.parentNode;
+        parent.textContent = parent.textContent;
+    });
 }
 
 // Initialize
