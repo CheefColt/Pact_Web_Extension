@@ -131,6 +131,28 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // popup.js
+document.addEventListener('DOMContentLoaded', () => {
+  const findPrivacyBtn = document.getElementById('findPrivacy');
+
+  findPrivacyBtn.addEventListener('click', async () => {
+    try {
+      const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+      
+      const response = await chrome.tabs.sendMessage(tab.id, {
+        action: "findPrivacyPolicy"
+      });
+
+      if (response?.link) {
+        console.log('Navigating to:', response.link);
+        await chrome.tabs.create({ url: response.link });
+      }
+    } catch (error) {
+      console.error('Error:', error);
+    }
+  });
+});
+
+// popup.js
 function chunkContent(text, size = 5000) {
   const chunks = [];
   for (let i = 0; i < text.length; i += size) {

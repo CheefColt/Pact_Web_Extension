@@ -1,25 +1,98 @@
 // privacy-content.js
 console.log('Privacy content script loaded');
 
+// 1. Style Definitions - Using CSS Reset for Consistency
+const styleSheet = document.createElement('style');
+styleSheet.textContent = `
+.privacy-analyzer-overlay * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.privacy-analyzer-overlay {
+    position: fixed;
+    top: 24px;
+    right: 24px;
+    width: 420px;
+    max-height: 85vh;
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 28px;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
+    z-index: 999999;
+    overflow-y: auto;
+}
+
+.privacy-analyzer-overlay h2 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #1a1a1a;
+    margin-bottom: 16px;
+}
+
+.privacy-analyzer-overlay p {
+    font-size: 14px;
+    line-height: 1.6;
+    color: #374151;
+    margin-bottom: 12px;
+}
+
+.privacy-analyzer-overlay ul {
+    list-style: disc;
+    margin: 12px 0;
+    padding-left: 24px;
+}
+
+.privacy-analyzer-overlay li {
+    font-size: 14px;
+    line-height: 1.6;
+    color: #374151;
+    margin: 8px 0;
+}
+
+.loading-state {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 20px 0;
+}
+
+.loader {
+    width: 20px;
+    height: 20px;
+    border: 2px solid #e2e8f0;
+    border-top-color: #3b82f6;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.loading-text {
+    color: #64748b;
+    font-size: 14px;
+}`;
+
+document.head.appendChild(styleSheet);
+
+// 2. Content Extraction
 function extractPrivacyContent() {
     const content = {
         url: window.location.href,
         title: document.title,
-        fullText: '',
-        totalLength: 0
+        fullText: ''
     };
 
-    // Get all paragraphs and combine
-    const paragraphs = Array.from(document.getElementsByTagName('p'));
-    console.log(`Found ${paragraphs.length} paragraphs`);
-    
-    content.fullText = paragraphs
+    const paragraphs = Array.from(document.getElementsByTagName('p'))
         .map(p => p.textContent.trim())
-        .filter(text => text.length > 0)
-        .join('\n\n');
+        .filter(text => text.length > 0);
     
-    content.totalLength = content.fullText.length;
-    console.log(`Total content length: ${content.totalLength} characters`);
+    content.fullText = paragraphs.join('\n\n');
+    console.log(`Extracted ${paragraphs.length} paragraphs`);
     
     return content;
 }
@@ -59,15 +132,33 @@ function chunkContent(content, maxChunkSize = 5000) {
     return chunks;
 }
 
-// Analyze privacy policy using Gemini API
+// 4. API Integration
 async function analyzePrivacyPolicy(text) {
-    const prompt = `Analyze this privacy policy text and provide:
-1. Simple summary in bullet points
-2. Key points about personal data usage
-3. Important user considerations
+    const prompt = `Analyze this privacy policy and provide a structured summary in the following HTML format:
 
-Text:
-${text}`;
+<div class="summary">
+    <h2>Key Points</h2>
+    <ul>
+        <li>[Brief, important points]</li>
+    </ul>
+
+    <h2>Data Collection</h2>
+    <ul>
+        <li>[What data is collected]</li>
+    </ul>
+
+    <h2>Data Usage</h2>
+    <ul>
+        <li>[How data is used]</li>
+    </ul>
+
+    <h2>Your Rights</h2>
+    <ul>
+        <li>[User rights and controls]</li>
+    </ul>
+</div>
+
+Policy Text: ${text}`;
 
     try {
         const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent', {
@@ -93,127 +184,171 @@ ${text}`;
     }
 }
 
-// Add styles first
-const styleSheet = document.createElement('style');
-styleSheet.textContent = `
-.privacy-analyzer-overlay {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    width: 400px;
-    max-height: 80vh; /* 80% of viewport height */
-    background: white;
-    border-radius: 8px;
-    padding: 20px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-    z-index: 999999;
-    font-family: Arial, sans-serif;
-    overflow-y: auto;
-    scrollbar-width: thin;
+// 5. Question Generation
+async function generateQuestions(text) {
+    console.log('Generating questions...');
+    try {
+        const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-goog-api-key': 'AIzaSyDj--K6qjcy4MZ0Acc_hbUMGvcitMOUPTQ'
+            },
+            body: JSON.stringify({
+                contents: [{
+                    parts: [{
+                        text: `Based on this privacy policy, generate 5 specific questions users might want to ask. Return as an array of questions.\n\n${text}`
+                    }]
+                }]
+            })
+        });
+        
+        const data = await response.json();
+        return data.candidates[0].content.parts[0].text
+            .split('\n')
+            .filter(line => line.trim().length > 0)
+            .slice(0, 5);
+    } catch (error) {
+        console.error('Question generation error:', error);
+        return [
+            'How is my personal data collected?',
+            'What are my privacy rights?',
+            'How is my data shared with third parties?',
+            'Can I opt out of data collection?',
+            'How is my data protected?'
+        ];
+    }
 }
 
-/* Custom scrollbar styling for webkit browsers */
-.privacy-analyzer-overlay::-webkit-scrollbar {
-    width: 8px;
+// Add handler for question clicks
+async function handleQuestionClick(question) {
+    const chatHistory = document.querySelector('.chat-history');
+    
+    // Add user question to chat
+    const questionDiv = document.createElement('div');
+    questionDiv.className = 'chat-message user-message';
+    questionDiv.textContent = `Q: ${question}`;
+    chatHistory.appendChild(questionDiv);
+
+    // Show loading state
+    const loadingDiv = document.createElement('div');
+    loadingDiv.className = 'chat-message loading';
+    loadingDiv.textContent = 'Getting answer...';
+    chatHistory.appendChild(loadingDiv);
+
+    try {
+        const content = extractPrivacyContent();
+        const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-goog-api-key': 'AIzaSyDj--K6qjcy4MZ0Acc_hbUMGvcitMOUPTQ'
+            },
+            body: JSON.stringify({
+                contents: [{
+                    parts: [{
+                        text: `Based on this privacy policy:\n${content.fullText}\n\nAnswer this question:\n${question}`
+                    }]
+                }]
+            })
+        });
+
+        const data = await response.json();
+        const answer = data.candidates[0].content.parts[0].text;
+
+        // Remove loading message
+        loadingDiv.remove();
+
+        // Add answer to chat
+        const answerDiv = document.createElement('div');
+        answerDiv.className = 'chat-message bot-message';
+        answerDiv.textContent = `A: ${answer}`;
+        chatHistory.appendChild(answerDiv);
+
+        // Scroll to bottom
+        chatHistory.scrollTop = chatHistory.scrollHeight;
+    } catch (error) {
+        console.error('Error getting answer:', error);
+        loadingDiv.textContent = 'Failed to get answer';
+    }
 }
 
-.privacy-analyzer-overlay::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 4px;
-}
-
-.privacy-analyzer-overlay::-webkit-scrollbar-thumb {
-    background: #888;
-    border-radius: 4px;
-}
-
-.privacy-analyzer-overlay::-webkit-scrollbar-thumb:hover {
-    background: #555;
-}
-
-/* Rest of your existing styles... */
-.loader {
-    display: inline-block;
-    width: 20px;
-    height: 20px;
-    border: 3px solid #f3f3f3;
-    border-radius: 50%;
-    border-top: 3px solid #3498db;
-    animation: spin 1s linear infinite;
-    margin-right: 10px;
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-.loading-text {
-    display: flex;
-    align-items: center;
-    color: #666;
-    margin: 10px 0;
-}
-
-.close-button {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    cursor: pointer;
-    padding: 5px;
-    font-size: 18px;
-}
-`;
-document.head.appendChild(styleSheet);
-
-// Create and show overlay
+// 3. Overlay Creation
 function createAnalyzerOverlay() {
+    console.log('Creating overlay...');
     const overlay = document.createElement('div');
     overlay.className = 'privacy-analyzer-overlay';
     
     overlay.innerHTML = `
-        <div class="close-button">×</div>
-        <h2 style="margin-top: 0; color: #333;">Privacy Policy Analyzer</h2>
-        <div class="loading-text">
+        <h2>Privacy Policy Analysis</h2>
+        <div class="loading-state">
             <div class="loader"></div>
-            <span>Analyzing privacy policy...</span>
+            <span class="loading-text">Analyzing privacy policy content...</span>
         </div>
     `;
 
-    // Add close button handler
-    overlay.querySelector('.close-button').onclick = () => overlay.remove();
-    
     document.body.appendChild(overlay);
     return overlay;
 }
 
-// Update overlay with analysis
+// 6. UI Updates
 function updateOverlayContent(overlay, analysis) {
-    const content = overlay.querySelector('.loading-text');
-    content.innerHTML = `
-        <div style="white-space: pre-line; line-height: 1.5;">
-            ${analysis}
-        </div>
+    console.log('Updating overlay content...');
+    const summarySection = overlay.querySelector('.summary-section');
+    summarySection.innerHTML = `
+        <h2 class="section-header">Privacy Policy Analysis</h2>
+        ${analysis}
     `;
+    summarySection.classList.add('visible');
 }
 
-// Update main execution
-window.addEventListener('load', () => {
-    setTimeout(async () => {
-        console.log('Starting privacy policy analysis...');
-        
-        // Create overlay first
+function displayQuestions(overlay, questions) {
+    console.log('Displaying questions...');
+    const questionsSection = overlay.querySelector('.questions-section');
+    const questionsList = overlay.querySelector('.questions-list');
+    
+    questionsList.innerHTML = '';
+    questions.forEach(question => {
+        const button = document.createElement('button');
+        button.className = 'question-btn';
+        button.textContent = question;
+        button.onclick = () => handleQuestionClick(question);
+        questionsList.appendChild(button);
+    });
+    
+    questionsSection.style.display = 'block';
+    questionsSection.classList.add('visible');
+}
+
+// 7. Main Initialization
+async function initializeAnalyzer() {
+    console.log('Initializing analyzer...');
+    try {
         const overlay = createAnalyzerOverlay();
+        const content = extractPrivacyContent();
         
-        // Get and analyze content
+        const analysis = await analyzePrivacyPolicy(content.fullText);
+        if (analysis) {
+            updateOverlayContent(overlay, analysis);
+            
+            const questions = await generateQuestions(content.fullText);
+            displayQuestions(overlay, questions);
+        }
+    } catch (error) {
+        console.error('Initialization error:', error);
+    }
+}
+
+// Update initialization
+window.addEventListener('load', () => {
+    console.log('Starting privacy policy analysis...');
+    setTimeout(async () => {
+        const overlay = createAnalyzerOverlay();
         const content = extractPrivacyContent();
         const analysis = await analyzePrivacyPolicy(content.fullText);
         
         if (analysis) {
-            console.log('Analysis complete, updating overlay');
-            updateOverlayContent(overlay, analysis);
-        } else {
-            updateOverlayContent(overlay, 'Failed to analyze privacy policy');
+            overlay.innerHTML = analysis;
         }
     }, 1500);
 });
