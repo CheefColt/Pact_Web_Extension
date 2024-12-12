@@ -811,47 +811,119 @@ function extractPrivacyContent() {
 
 // API Integration
 async function analyzePrivacyPolicy(text, level = 'default') {
+    const API_KEY = 'AIzaSyDj--K6qjcy4MZ0Acc_hbUMGvcitMOUPTQ';
+    const API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
+
     const prompts = {
-        simple: `Analyze this privacy policy and provide 6-8 key points in simple, easy-to-understand English. Return in this HTML format:
-            <section>
-                <h2>Simple Privacy Summary</h2>
-                <ul>[6-8 bullet points in basic language]</ul>
-            </section>`,
-        default: `Analyze this privacy policy and provide 13-15 points with moderate detail. Return in this HTML format:
-            <section>
-                <h2>Privacy Policy Analysis</h2>
-                <ul>[13-15 bullet points in moderate language]</ul>
-            </section>`,
-        detailed: `Analyze this privacy policy and provide 15-18 detailed points using technical terms where appropriate. Return in this HTML format:
-            <section>
-                <h2>Detailed Privacy Analysis</h2>
-                <ul>[15-18 bullet points with technical details]</ul>
-            </section>`
+        simple: `Analyze this privacy policy and summarize it into 5 critical points, focusing on the most important takeaways and risks for the user. Keep the language simple and concise. Format the response EXACTLY as follows:
+<div class="analysis-summary">
+    <h2>Privacy Policy Summary</h2>
+    <ul>
+        <li>Point 1: Key takeaway or risk</li>
+        <li>Point 2: Key takeaway or risk</li>
+        <li>Point 3: Key takeaway or risk</li>
+        <li>Point 4: Key takeaway or risk</li>
+        <li>Point 5: Key takeaway or risk</li>
+    </ul>
+</div>`,
+
+        default: `Analyze this privacy policy and provide up to 10 critical points that are relevant to an everyday user. Focus on key aspects such as personal data, cookies, and other important elements a user should know. Format the response EXACTLY as follows:
+<div class="analysis-summary">
+    <section>
+        <h2>Personal Data</h2>
+        <ul>
+            <li>What personal data is collected</li>
+            <li>How it is used</li>
+        </ul>
+    </section>
+    <section>
+        <h2>Cookies and Tracking</h2>
+        <ul>
+            <li>Details about cookies used</li>
+            <li>Purpose of tracking mechanisms</li>
+        </ul>
+    </section>
+    <section>
+        <h2>User Rights</h2>
+        <ul>
+            <li>Rights regarding personal data</li>
+            <li>How users can exercise these rights</li>
+        </ul>
+    </section>
+    <!-- Add additional sections as necessary up to 10 points -->
+</div>`,
+
+        detailed: `Analyze this privacy policy to provide a comprehensive and detailed summary. Address the following points:
+- What types of data are collected and how.
+- Who the data is shared with, including third parties, advertisers, or government agencies.
+- How the data is used by the app and its partners.
+- The potential consequences for the user, including privacy risks, security implications, and possible uses of their data by third parties.
+Format the response EXACTLY as follows:
+<div class="analysis-summary">
+    <section>
+        <h2>Data Collection</h2>
+        <ul>
+            <li>Types of data collected</li>
+            <li>Methods of data collection</li>
+        </ul>
+    </section>
+    <section>
+        <h2>Data Sharing</h2>
+        <ul>
+            <li>Entities data is shared with</li>
+            <li>Reasons for sharing data</li>
+        </ul>
+    </section>
+    <section>
+        <h2>Data Usage</h2>
+        <ul>
+            <li>How collected data is utilized</li>
+            <li>Purpose of data usage</li>
+        </ul>
+    </section>
+    <section>
+        <h2>Privacy Risks</h2>
+        <ul>
+            <li>Potential consequences for the user</li>
+            <li>Security implications</li>
+            <li>Potential misuse by third parties</li>
+        </ul>
+    </section>
+</div>`
     };
 
-    const prompt = prompts[level] + `\n\nPrivacy Policy Text: ${text}`;
-
     try {
-        const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent', {
+        console.log('Analyzing privacy policy...');
+
+        const response = await fetch(API_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'x-goog-api-key': 'AIzaSyDj--K6qjcy4MZ0Acc_hbUMGvcitMOUPTQ'
+                'x-goog-api-key': API_KEY
             },
             body: JSON.stringify({
                 contents: [{
                     parts: [{
-                        text: prompt
+                        text: `${prompts[level]}\n\nPrivacy Policy Text:\n${text}`
                     }]
                 }]
             })
         });
-        
+
+        if (!response.ok) {
+            throw new Error(`API Error: ${response.status}`);
+        }
+
         const data = await response.json();
+
+        if (!data.candidates || !data.candidates[0]?.content?.parts[0]?.text) {
+            throw new Error('Invalid API response format');
+        }
+
         return data.candidates[0].content.parts[0].text;
     } catch (error) {
-        console.error('API Error:', error);
-        return null;
+        console.error('Analysis error:', error);
+        throw new Error('Failed to analyze privacy policy');
     }
 }
 
