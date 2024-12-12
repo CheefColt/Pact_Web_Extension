@@ -375,6 +375,134 @@ styleSheet.textContent += `
     color: white;
 }`;
 
+// Add to existing styles
+styleSheet.textContent += `
+.notification-panel {
+    margin-top: 16px;
+    margin-bottom: 16px;
+}
+
+.notification-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.notification-count {
+    background: #ef4444;
+    color: white;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+}
+
+.notification-item {
+    padding: 12px;
+    margin-bottom: 8px;
+    border-radius: 8px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    animation: slideIn 0.3s ease;
+}
+
+.notification-high {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+}
+
+.notification-medium {
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+}
+
+.notification-low {
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+}
+
+.notification-icon {
+    font-size: 16px;
+}
+
+.notification-content {
+    flex: 1;
+}
+
+.notification-title {
+    font-weight: 600;
+    margin-bottom: 4px;
+    font-size: 14px;
+}
+
+.notification-description {
+    font-size: 12px;
+    color: #4b5563;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}`;
+
+// Add after existing styles
+styleSheet.textContent += `
+.notification-panel {
+    margin-bottom: 20px;
+    padding: 16px;
+    background: #f8fafc;
+    border-radius: 8px;
+}
+
+.notification-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.notification-header h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1a1a1a;
+}
+
+.notification-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.notification-item {
+    padding: 12px;
+    border-radius: 6px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+}
+
+.notification-high {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+}
+
+.notification-medium {
+    background: #fff7ed;
+    border: 1px solid #fed7aa;
+}
+
+.notification-low {
+    background: #f0f9ff;
+    border: 1px solid #bae6fd;
+}`;
+
 document.head.appendChild(styleSheet);
 
 // Add debounce utility
@@ -399,6 +527,13 @@ function createAnalyzerOverlay() {
         <div class="header">
             <h2>Privacy Policy Analysis</h2>
             <button class="close-button">×</button>
+        </div>
+        <div class="notification-panel">
+            <div class="notification-header">
+                <h3>Privacy Alerts</h3>
+                <span class="notification-count">0</span>
+            </div>
+            <div class="notification-list"></div>
         </div>
         <div class="search-container">
             <input type="text" class="search-input" placeholder="Search in privacy policy...">
@@ -635,6 +770,34 @@ function createAnalyzerOverlay() {
         }
     });
 
+    // Add notification handling
+    function addNotification(notification) {
+        const list = overlay.querySelector('.notifications-list');
+        const item = document.createElement('div');
+        item.className = `notification-item notification-${notification.priority}`;
+        
+        item.innerHTML = `
+            <div class="notification-icon">${notification.icon}</div>
+            <div class="notification-content">
+                <div class="notification-title">${notification.title}</div>
+                <div class="notification-description">${notification.description}</div>
+            </div>
+        `;
+
+        list.appendChild(item);
+        updateNotificationCount();
+    }
+
+    function updateNotificationCount() {
+        const count = overlay.querySelectorAll('.notification-item').length;
+        overlay.querySelector('.notification-count').textContent = count;
+    }
+
+    // Initialize content analysis
+    const content = extractPrivacyContent();
+    checkPrivacyAlerts(content, overlay);
+    analyzePrivacyPolicy(content);
+
     return overlay;
 }
 
@@ -800,6 +963,55 @@ function clearHighlights(overlay) {
         const parent = highlight.parentNode;
         parent.textContent = parent.textContent;
     });
+}
+
+// Add privacy checks function
+function checkPrivacyAlerts(text, overlay) {
+    const alerts = [
+        {
+            pattern: /sell.*personal.*information|sell.*data/i,
+            priority: 'high',
+            icon: '🚨',
+            title: 'Data Selling',
+            description: 'This policy indicates your data may be sold'
+        },
+        {
+            pattern: /share.*third.?part|share.*partner/i,
+            priority: 'high',
+            icon: '⚠️',
+            title: 'Third-party Sharing',
+            description: 'Your data may be shared with third parties'
+        },
+        {
+            pattern: /track.*behavior|monitor.*activity/i,
+            priority: 'medium',
+            icon: '👁️',
+            title: 'Activity Tracking',
+            description: 'Your online activity is being monitored'
+        }
+    ];
+
+    const notificationList = overlay.querySelector('.notification-list');
+    let alertCount = 0;
+
+    alerts.forEach(alert => {
+        if (alert.pattern.test(text)) {
+            alertCount++;
+            const item = document.createElement('div');
+            item.className = `notification-item notification-${alert.priority}`;
+            item.innerHTML = `
+                <div>${alert.icon}</div>
+                <div>
+                    <div style="font-weight: 600; margin-bottom: 4px">${alert.title}</div>
+                    <div style="font-size: 12px; color: #4b5563">${alert.description}</div>
+                </div>
+            `;
+            notificationList.appendChild(item);
+        }
+    });
+
+    overlay.querySelector('.notification-count').textContent = alertCount || '0';
+    overlay.querySelector('.notification-panel').style.display = alertCount ? 'block' : 'none';
 }
 
 // Initialize
