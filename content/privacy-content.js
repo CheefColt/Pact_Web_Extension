@@ -1,7 +1,7 @@
 // privacy-content.js
 console.log('Privacy content script loaded');
 
-// 1. Style Definitions - Using CSS Reset for Consistency
+// Style Definitions
 const styleSheet = document.createElement('style');
 styleSheet.textContent = `
 .privacy-analyzer-overlay * {
@@ -25,38 +25,69 @@ styleSheet.textContent = `
     overflow-y: auto;
 }
 
-.privacy-analyzer-overlay h2 {
+.header {
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #e5e7eb;
+    position: relative;
+}
+
+.header h2 {
     font-size: 18px;
     font-weight: 600;
     color: #1a1a1a;
-    margin-bottom: 16px;
+    margin: 0;
 }
 
-.privacy-analyzer-overlay p {
-    font-size: 14px;
-    line-height: 1.6;
-    color: #374151;
-    margin-bottom: 12px;
+.close-button {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: none;
+    background: #f1f5f9;
+    color: #64748b;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
 }
 
-.privacy-analyzer-overlay ul {
+.analysis-content {
+    margin-bottom: 24px;
+}
+
+.analysis-content h2 {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1a1a1a;
+    margin: 16px 0 12px;
+}
+
+.analysis-content ul {
     list-style: disc;
-    margin: 12px 0;
+    margin: 8px 0;
     padding-left: 24px;
 }
 
-.privacy-analyzer-overlay li {
+.analysis-content li {
     font-size: 14px;
     line-height: 1.6;
     color: #374151;
-    margin: 8px 0;
+    margin: 6px 0;
 }
 
 .loading-state {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 20px 0;
+    padding: 16px;
+    background: #f8fafc;
+    border-radius: 8px;
+    margin: 16px 0;
 }
 
 .loader {
@@ -68,97 +99,110 @@ styleSheet.textContent = `
     animation: spin 0.8s linear infinite;
 }
 
-@keyframes spin {
-    to { transform: rotate(360deg); }
-}
-
 .loading-text {
     color: #64748b;
     font-size: 14px;
+}
+
+.questions-section {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.question-btn {
+    width: 100%;
+    padding: 12px;
+    margin: 8px 0;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    text-align: left;
+    cursor: pointer;
+    font-size: 14px;
+    color: #374151;
+    transition: all 0.2s ease;
+}
+
+.question-btn:hover {
+    background: #f1f5f9;
+    border-color: #3b82f6;
+}
+
+.answer-section {
+    margin-top: 16px;
+    padding: 16px;
+    background: #f8fafc;
+    border-radius: 8px;
+    font-size: 14px;
+    color: #374151;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
 }`;
 
 document.head.appendChild(styleSheet);
 
-// 2. Content Extraction
-function extractPrivacyContent() {
-    const content = {
-        url: window.location.href,
-        title: document.title,
-        fullText: ''
-    };
+// Create Overlay
+function createAnalyzerOverlay() {
+    const overlay = document.createElement('div');
+    overlay.className = 'privacy-analyzer-overlay';
+    
+    overlay.innerHTML = `
+        <div class="header">
+            <h2>Privacy Policy Analysis</h2>
+            <button class="close-button">×</button>
+        </div>
+        <div class="loading-state">
+            <div class="loader"></div>
+            <span class="loading-text">Analyzing privacy policy...</span>
+        </div>
+        <div class="analysis-content"></div>
+        <div class="questions-section" style="display: none;">
+            <h2>Ask Questions</h2>
+            <div class="questions-list"></div>
+            <div class="answer-section"></div>
+        </div>
+    `;
 
+    overlay.querySelector('.close-button').addEventListener('click', () => overlay.remove());
+    document.body.appendChild(overlay);
+    return overlay;
+}
+
+// Extract Content
+function extractPrivacyContent() {
     const paragraphs = Array.from(document.getElementsByTagName('p'))
         .map(p => p.textContent.trim())
         .filter(text => text.length > 0);
-    
-    content.fullText = paragraphs.join('\n\n');
-    console.log(`Extracted ${paragraphs.length} paragraphs`);
-    
-    return content;
+    return paragraphs.join('\n\n');
 }
 
-// Helper function to get element's path
-function getElementPath(element) {
-    const path = [];
-    while (element && element.nodeType === Node.ELEMENT_NODE) {
-        let selector = element.nodeName.toLowerCase();
-        if (element.id) {
-            selector += `#${element.id}`;
-        } else if (element.className) {
-            selector += `.${element.className.replace(/\s+/g, '.')}`;
-        }
-        path.unshift(selector);
-        element = element.parentNode;
-    }
-    return path.join(' > ');
-}
-
-// Split content into manageable chunks
-function chunkContent(content, maxChunkSize = 5000) {
-    const chunks = [];
-    let currentChunk = '';
-
-    content.paragraphs.forEach(p => {
-        if ((currentChunk + p.text).length > maxChunkSize) {
-            chunks.push(currentChunk);
-            currentChunk = p.text;
-        } else {
-            currentChunk += (currentChunk ? '\n\n' : '') + p.text;
-        }
-    });
-
-    if (currentChunk) chunks.push(currentChunk);
-    console.log(`Created ${chunks.length} chunks for analysis`);
-    return chunks;
-}
-
-// 4. API Integration
+// API Integration
 async function analyzePrivacyPolicy(text) {
-    const prompt = `Analyze this privacy policy and provide a structured summary in the following HTML format:
+    const prompt = `Analyze this privacy policy and provide a summary strictly in this HTML format:
 
-<div class="summary">
+<section>
     <h2>Key Points</h2>
     <ul>
-        <li>[Brief, important points]</li>
+        <li>[key point]</li>
     </ul>
-
+</section>
+<section>
     <h2>Data Collection</h2>
     <ul>
-        <li>[What data is collected]</li>
+        <li>[data point]</li>
     </ul>
-
+</section>
+<section>
     <h2>Data Usage</h2>
     <ul>
-        <li>[How data is used]</li>
+        <li>[usage point]</li>
     </ul>
+</section>
 
-    <h2>Your Rights</h2>
-    <ul>
-        <li>[User rights and controls]</li>
-    </ul>
-</div>
-
-Policy Text: ${text}`;
+Privacy Policy: ${text}`;
 
     try {
         const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent', {
@@ -184,9 +228,8 @@ Policy Text: ${text}`;
     }
 }
 
-// 5. Question Generation
+// Generate Questions
 async function generateQuestions(text) {
-    console.log('Generating questions...');
     try {
         const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent', {
             method: 'POST',
@@ -197,45 +240,35 @@ async function generateQuestions(text) {
             body: JSON.stringify({
                 contents: [{
                     parts: [{
-                        text: `Based on this privacy policy, generate 5 specific questions users might want to ask. Return as an array of questions.\n\n${text}`
+                        text: `Based on this privacy policy, generate 5 relevant questions. Return ONLY the questions separated by newlines.\n\n${text}`
                     }]
                 }]
             })
         });
         
         const data = await response.json();
-        return data.candidates[0].content.parts[0].text
-            .split('\n')
-            .filter(line => line.trim().length > 0)
-            .slice(0, 5);
+        return data.candidates[0].content.parts[0].text.split('\n').filter(q => q.trim());
     } catch (error) {
         console.error('Question generation error:', error);
         return [
-            'How is my personal data collected?',
+            'How is my data collected?',
             'What are my privacy rights?',
-            'How is my data shared with third parties?',
+            'How is my data shared?',
             'Can I opt out of data collection?',
             'How is my data protected?'
         ];
     }
 }
 
-// Add handler for question clicks
-async function handleQuestionClick(question) {
-    const chatHistory = document.querySelector('.chat-history');
+// Handle Question Click
+async function handleQuestionClick(question, answerSection) {
+    answerSection.innerHTML = `
+        <div class="loading-state">
+            <div class="loader"></div>
+            <span class="loading-text">Finding answer...</span>
+        </div>
+    `;
     
-    // Add user question to chat
-    const questionDiv = document.createElement('div');
-    questionDiv.className = 'chat-message user-message';
-    questionDiv.textContent = `Q: ${question}`;
-    chatHistory.appendChild(questionDiv);
-
-    // Show loading state
-    const loadingDiv = document.createElement('div');
-    loadingDiv.className = 'chat-message loading';
-    loadingDiv.textContent = 'Getting answer...';
-    chatHistory.appendChild(loadingDiv);
-
     try {
         const content = extractPrivacyContent();
         const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent', {
@@ -247,108 +280,56 @@ async function handleQuestionClick(question) {
             body: JSON.stringify({
                 contents: [{
                     parts: [{
-                        text: `Based on this privacy policy:\n${content.fullText}\n\nAnswer this question:\n${question}`
+                        text: `Based on this privacy policy:\n${content}\n\nProvide a concise answer to: ${question}`
                     }]
                 }]
             })
         });
 
         const data = await response.json();
-        const answer = data.candidates[0].content.parts[0].text;
-
-        // Remove loading message
-        loadingDiv.remove();
-
-        // Add answer to chat
-        const answerDiv = document.createElement('div');
-        answerDiv.className = 'chat-message bot-message';
-        answerDiv.textContent = `A: ${answer}`;
-        chatHistory.appendChild(answerDiv);
-
-        // Scroll to bottom
-        chatHistory.scrollTop = chatHistory.scrollHeight;
+        answerSection.innerHTML = `<p>${data.candidates[0].content.parts[0].text}</p>`;
     } catch (error) {
-        console.error('Error getting answer:', error);
-        loadingDiv.textContent = 'Failed to get answer';
+        answerSection.innerHTML = '<p>Failed to get answer. Please try again.</p>';
     }
 }
 
-// 3. Overlay Creation
-function createAnalyzerOverlay() {
-    console.log('Creating overlay...');
-    const overlay = document.createElement('div');
-    overlay.className = 'privacy-analyzer-overlay';
-    
-    overlay.innerHTML = `
-        <h2>Privacy Policy Analysis</h2>
-        <div class="loading-state">
-            <div class="loader"></div>
-            <span class="loading-text">Analyzing privacy policy content...</span>
-        </div>
-    `;
-
-    document.body.appendChild(overlay);
-    return overlay;
-}
-
-// 6. UI Updates
-function updateOverlayContent(overlay, analysis) {
-    console.log('Updating overlay content...');
-    const summarySection = overlay.querySelector('.summary-section');
-    summarySection.innerHTML = `
-        <h2 class="section-header">Privacy Policy Analysis</h2>
-        ${analysis}
-    `;
-    summarySection.classList.add('visible');
-}
-
-function displayQuestions(overlay, questions) {
-    console.log('Displaying questions...');
-    const questionsSection = overlay.querySelector('.questions-section');
-    const questionsList = overlay.querySelector('.questions-list');
-    
-    questionsList.innerHTML = '';
-    questions.forEach(question => {
-        const button = document.createElement('button');
-        button.className = 'question-btn';
-        button.textContent = question;
-        button.onclick = () => handleQuestionClick(question);
-        questionsList.appendChild(button);
-    });
-    
-    questionsSection.style.display = 'block';
-    questionsSection.classList.add('visible');
-}
-
-// 7. Main Initialization
-async function initializeAnalyzer() {
-    console.log('Initializing analyzer...');
-    try {
-        const overlay = createAnalyzerOverlay();
-        const content = extractPrivacyContent();
-        
-        const analysis = await analyzePrivacyPolicy(content.fullText);
-        if (analysis) {
-            updateOverlayContent(overlay, analysis);
-            
-            const questions = await generateQuestions(content.fullText);
-            displayQuestions(overlay, questions);
-        }
-    } catch (error) {
-        console.error('Initialization error:', error);
-    }
-}
-
-// Update initialization
+// Initialize
 window.addEventListener('load', () => {
-    console.log('Starting privacy policy analysis...');
     setTimeout(async () => {
-        const overlay = createAnalyzerOverlay();
-        const content = extractPrivacyContent();
-        const analysis = await analyzePrivacyPolicy(content.fullText);
-        
-        if (analysis) {
-            overlay.innerHTML = analysis;
+        try {
+            const overlay = createAnalyzerOverlay();
+            const content = extractPrivacyContent();
+            
+            // Get analysis and questions
+            const [analysis, questions] = await Promise.all([
+                analyzePrivacyPolicy(content),
+                generateQuestions(content)
+            ]);
+            
+            // Update analysis content
+            if (analysis) {
+                const analysisContent = overlay.querySelector('.analysis-content');
+                overlay.querySelector('.loading-state').style.display = 'none';
+                analysisContent.innerHTML = analysis;
+            }
+            
+            // Display questions
+            if (questions) {
+                const questionsSection = overlay.querySelector('.questions-section');
+                const questionsList = overlay.querySelector('.questions-list');
+                const answerSection = overlay.querySelector('.answer-section');
+                
+                questionsSection.style.display = 'block';
+                questions.forEach(question => {
+                    const button = document.createElement('button');
+                    button.className = 'question-btn';
+                    button.textContent = question;
+                    button.onclick = () => handleQuestionClick(question, answerSection);
+                    questionsList.appendChild(button);
+                });
+            }
+        } catch (error) {
+            console.error('Initialization error:', error);
         }
     }, 1500);
 });
