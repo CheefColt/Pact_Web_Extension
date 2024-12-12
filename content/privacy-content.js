@@ -140,6 +140,145 @@ styleSheet.textContent = `
 
 @keyframes spin {
     to { transform: rotate(360deg); }
+}
+
+.chat-section {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.chat-history {
+    max-height: 300px;
+    overflow-y: auto;
+    margin-bottom: 16px;
+    padding: 8px;
+}
+
+.chat-message {
+    margin: 8px 0;
+    padding: 12px;
+    border-radius: 8px;
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.user-message {
+    background: #f0f9ff;
+    margin-left: 20%;
+    border-bottom-right-radius: 4px;
+}
+
+.bot-message {
+    background: #f8fafc;
+    margin-right: 20%;
+    border-bottom-left-radius: 4px;
+}
+
+.chat-input-container {
+    display: flex;
+    gap: 8px;
+    padding: 8px;
+    background: #f8fafc;
+    border-radius: 8px;
+}
+
+.chat-input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 14px;
+    outline: none;
+}
+
+.chat-input:focus {
+    border-color: #3b82f6;
+}
+
+.send-button {
+    padding: 8px 16px;
+    background: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.send-button:hover {
+    background: #2563eb;
+}
+
+.chat-loading {
+    color: #64748b;
+    font-style: italic;
+    padding: 8px;
+}
+
+.level-selector {
+    margin-bottom: 20px;
+    padding: 16px;
+    background: #f8fafc;
+    border-radius: 8px;
+}
+
+.level-selector h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1a1a1a;
+    margin-bottom: 12px;
+}
+
+.level-options {
+    display: flex;
+    gap: 12px;
+}
+
+.level-option {
+    flex: 1;
+    position: relative;
+}
+
+.level-option input[type="radio"] {
+    display: none;
+}
+
+.level-option label {
+    display: block;
+    padding: 10px;
+    text-align: center;
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    font-size: 14px;
+    color: #374151;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.level-option input[type="radio"]:checked + label {
+    border-color: #3b82f6;
+    background: #f0f9ff;
+    color: #1d4ed8;
+}
+
+.analyze-button {
+    width: 100%;
+    padding: 12px;
+    background: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+    margin-top: 12px;
+}
+
+.analyze-button:hover {
+    background: #2563eb;
 }`;
 
 document.head.appendChild(styleSheet);
@@ -154,9 +293,23 @@ function createAnalyzerOverlay() {
             <h2>Privacy Policy Analysis</h2>
             <button class="close-button">×</button>
         </div>
-        <div class="loading-state">
-            <div class="loader"></div>
-            <span class="loading-text">Analyzing privacy policy...</span>
+        <div class="level-selector">
+            <h3>Select Analysis Level</h3>
+            <div class="level-options">
+                <div class="level-option">
+                    <input type="radio" id="simple" name="level" value="simple">
+                    <label for="simple">Simple</label>
+                </div>
+                <div class="level-option">
+                    <input type="radio" id="default" name="level" value="default" checked>
+                    <label for="default">Default</label>
+                </div>
+                <div class="level-option">
+                    <input type="radio" id="detailed" name="level" value="detailed">
+                    <label for="detailed">Detailed</label>
+                </div>
+            </div>
+            <button class="analyze-button">Analyze Privacy Policy</button>
         </div>
         <div class="analysis-content"></div>
         <div class="questions-section" style="display: none;">
@@ -164,10 +317,106 @@ function createAnalyzerOverlay() {
             <div class="questions-list"></div>
             <div class="answer-section"></div>
         </div>
+        <div class="chat-section">
+            <h2>Chat About Policy</h2>
+            <div class="chat-history"></div>
+            <div class="chat-input-container">
+                <input type="text" class="chat-input" placeholder="Ask anything about the privacy policy...">
+                <button class="send-button">Send</button>
+            </div>
+        </div>
     `;
+
+    // Add chat handlers
+    const chatInput = overlay.querySelector('.chat-input');
+    const sendButton = overlay.querySelector('.send-button');
+    const chatHistory = overlay.querySelector('.chat-history');
+
+    async function handleChat() {
+        const message = chatInput.value.trim();
+        if (!message) return;
+
+        // Clear input
+        chatInput.value = '';
+
+        // Add user message
+        const userDiv = document.createElement('div');
+        userDiv.className = 'chat-message user-message';
+        userDiv.textContent = message;
+        chatHistory.appendChild(userDiv);
+
+        // Add loading message
+        const loadingDiv = document.createElement('div');
+        loadingDiv.className = 'chat-loading';
+        loadingDiv.textContent = 'Getting response...';
+        chatHistory.appendChild(loadingDiv);
+
+        // Scroll to bottom
+        chatHistory.scrollTop = chatHistory.scrollHeight;
+
+        try {
+            const content = extractPrivacyContent();
+            const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-goog-api-key': 'AIzaSyDj--K6qjcy4MZ0Acc_hbUMGvcitMOUPTQ'
+                },
+                body: JSON.stringify({
+                    contents: [{
+                        parts: [{
+                            text: `Based on this privacy policy:\n${content}\n\nUser Question: ${message}\n\nProvide a clear and concise answer:`
+                        }]
+                    }]
+                })
+            });
+
+            const data = await response.json();
+            
+            // Remove loading
+            loadingDiv.remove();
+
+            // Add bot response
+            const botDiv = document.createElement('div');
+            botDiv.className = 'chat-message bot-message';
+            botDiv.textContent = data.candidates[0].content.parts[0].text;
+            chatHistory.appendChild(botDiv);
+            
+            // Scroll to bottom
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        } catch (error) {
+            loadingDiv.textContent = 'Failed to get response. Please try again.';
+        }
+    }
+
+    sendButton.addEventListener('click', handleChat);
+    chatInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') handleChat();
+    });
 
     overlay.querySelector('.close-button').addEventListener('click', () => overlay.remove());
     document.body.appendChild(overlay);
+
+    // Add analyze button handler
+    const analyzeButton = overlay.querySelector('.analyze-button');
+    analyzeButton.addEventListener('click', async () => {
+        const selectedLevel = overlay.querySelector('input[name="level"]:checked').value;
+        const content = extractPrivacyContent();
+        
+        // Show loading state
+        overlay.querySelector('.analysis-content').innerHTML = `
+            <div class="loading-state">
+                <div class="loader"></div>
+                <span class="loading-text">Analyzing privacy policy...</span>
+            </div>
+        `;
+        
+        const analysis = await analyzePrivacyPolicy(content, selectedLevel);
+        if (analysis) {
+            overlay.querySelector('.analysis-content').innerHTML = analysis;
+        }
+    });
+
     return overlay;
 }
 
@@ -180,29 +429,26 @@ function extractPrivacyContent() {
 }
 
 // API Integration
-async function analyzePrivacyPolicy(text) {
-    const prompt = `Analyze this privacy policy and provide a summary strictly in this HTML format:
+async function analyzePrivacyPolicy(text, level = 'default') {
+    const prompts = {
+        simple: `Analyze this privacy policy and provide 6-8 key points in simple, easy-to-understand English. Return in this HTML format:
+            <section>
+                <h2>Simple Privacy Summary</h2>
+                <ul>[6-8 bullet points in basic language]</ul>
+            </section>`,
+        default: `Analyze this privacy policy and provide 13-15 points with moderate detail. Return in this HTML format:
+            <section>
+                <h2>Privacy Policy Analysis</h2>
+                <ul>[13-15 bullet points in moderate language]</ul>
+            </section>`,
+        detailed: `Analyze this privacy policy and provide 15-18 detailed points using technical terms where appropriate. Return in this HTML format:
+            <section>
+                <h2>Detailed Privacy Analysis</h2>
+                <ul>[15-18 bullet points with technical details]</ul>
+            </section>`
+    };
 
-<section>
-    <h2>Key Points</h2>
-    <ul>
-        <li>[key point]</li>
-    </ul>
-</section>
-<section>
-    <h2>Data Collection</h2>
-    <ul>
-        <li>[data point]</li>
-    </ul>
-</section>
-<section>
-    <h2>Data Usage</h2>
-    <ul>
-        <li>[usage point]</li>
-    </ul>
-</section>
-
-Privacy Policy: ${text}`;
+    const prompt = prompts[level] + `\n\nPrivacy Policy Text: ${text}`;
 
     try {
         const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent', {
