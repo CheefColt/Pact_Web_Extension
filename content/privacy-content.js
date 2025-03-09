@@ -165,7 +165,7 @@ Policy Text: ${text}`;
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'x-goog-api-key': 'AIzaSyDj--K6qjcy4MZ0Acc_hbUMGvcitMOUPTQ'
+                'x-goog-api-key': 'API_KEY'
             },
             body: JSON.stringify({
                 contents: [{
