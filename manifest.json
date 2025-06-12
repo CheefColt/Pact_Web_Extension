@@ -1,25 +1,37 @@
 {
   "manifest_version": 3,
-  "name": "Privacy Policy Analyzer Pro",
-  "version": "1.0.0",
-  "description": "Analyzes privacy policies using AI, provides summaries, and identifies potential risks",
+  "name": "Privacy Policy Analyzer",
+  "version": "1.0",
+  "description": "Extracts and analyzes privacy policies from webpages",
   "permissions": [
     "activeTab",
-    "scripting"
+    "scripting",
+    "tabs"
   ],
   "host_permissions": [
-    "https://generativelanguage.googleapis.com/*"
+    "http://localhost:3000/*"
   ],
-  "action": {
-    "default_title": "Analyze Privacy Policy"
+  "background": {
+    "service_worker": "background.js"
   },
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content/privacy-content.js"]
+      "js": ["content/privacy-content.js"],
+      "run_at": "document_idle"
     }
   ],
-  "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'"
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "assets/images/pactLogo.jpg",
+      "48": "assets/images/pactLogo.jpg",
+      "128": "assets/images/pactLogo.jpg"
+    }
+  },
+  "icons": {
+    "16": "assets/images/pactLogo.jpg",
+    "48": "assets/images/pactLogo.jpg",
+    "128": "assets/images/pactLogo.jpg"
   }
 }

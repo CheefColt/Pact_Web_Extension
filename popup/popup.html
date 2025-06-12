@@ -2,11 +2,156 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Privacy Policy Analyzer</title>
-  <link rel="stylesheet" type="text/css" href="popup.css">
+    <style>
+        body {
+            width: 400px;
+            padding: 10px;
+            font-family: Arial, sans-serif;
+            color: #333;
+        }
+        .button-container {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 10px;
+        }
+        button {
+            flex: 1;
+            padding: 8px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        button.secondary {
+            background: #2196F3;
+        }
+        button.analyze {
+            background: #9C27B0;
+            display: none;
+            margin-top: 10px;
+        }
+        select {
+            width: 100%;
+            padding: 8px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            display: none;
+            background: white;
+        }
+        #output {
+            margin-top: 10px;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #e0e0e0;
+            padding: 12px;
+            font-size: 14px;
+            border-radius: 4px;
+            line-height: 1.5;
+            background: #fff;
+        }
+        .error {
+            color: #f44336;
+            margin: 10px 0;
+            padding: 8px;
+            background: #ffebee;
+            border-radius: 4px;
+        }
+        .success {
+            color: #4caf50;
+            margin: 10px 0;
+            padding: 8px;
+            background: #e8f5e9;
+            border-radius: 4px;
+        }
+        .info {
+            color: #2196f3;
+            margin: 10px 0;
+            padding: 8px;
+            background: #e3f2fd;
+            border-radius: 4px;
+        }
+        /* Analysis Results Styling */
+        .analysis-result {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+        .analysis-result h1 {
+            font-size: 16px;
+            margin: 16px 0 8px 0;
+            color: #1a237e;
+            border-bottom: 2px solid #1a237e;
+            padding-bottom: 4px;
+        }
+        .analysis-result h2 {
+            font-size: 14px;
+            margin: 12px 0 6px 0;
+            color: #283593;
+        }
+        .analysis-result ul {
+            margin: 8px 0;
+            padding-left: 20px;
+        }
+        .analysis-result li {
+            margin: 4px 0;
+            line-height: 1.4;
+        }
+        .analysis-result p {
+            margin: 8px 0;
+            line-height: 1.4;
+        }
+        /* Loading Animation */
+        .loading {
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            gap: 10px;
+        }
+        .loading-spinner {
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .loading-text {
+            color: #666;
+            font-size: 14px;
+        }
+    </style>
 </head>
 <body>
-  <button id="findPrivacy">Find Privacy Policy</button>
-  <script src="popup.js"></script>
+    <div class="button-container">
+        <button id="privacyButton" class="secondary">Find Privacy Policy</button>
+        <button id="extractButton">Extract All Text</button>
+    </div>
+    <select id="analysisLevel">
+        <option value="simple">Simple Analysis</option>
+        <option value="default" selected>Standard Analysis</option>
+        <option value="detailed">Detailed Analysis</option>
+    </select>
+    <button id="analyzeButton" class="analyze">Analyze Privacy Policy</button>
+    <div id="status"></div>
+    <div id="loading" class="loading">
+        <div class="loading-spinner"></div>
+        <span class="loading-text">Analyzing privacy policy...</span>
+    </div>
+    <div id="output"></div>
+    <script src="popup.js"></script>
 </body>
 </html>

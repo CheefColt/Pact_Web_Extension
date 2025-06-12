@@ -1,183 +1,273 @@
-// popup.js - Consolidated version
+// popup.js
 document.addEventListener('DOMContentLoaded', () => {
-  const chatBox = document.getElementById('chat-box');
-  const userInput = document.getElementById('user-input');
-  const sendButton = document.getElementById('send-button');
-  const container = document.querySelector('.container');
+    const extractButton = document.getElementById('extractButton');
+    const privacyButton = document.getElementById('privacyButton');
+    const analyzeButton = document.getElementById('analyzeButton');
+    const analysisLevel = document.getElementById('analysisLevel');
+    const statusDiv = document.getElementById('status');
+    const outputDiv = document.getElementById('output');
+    const loadingDiv = document.getElementById('loading');
 
-  // Create privacy policy button once
-  const existingBtn = document.getElementById('findPrivacy');
-  if (!existingBtn) {
-    const findPrivacyBtn = document.createElement('button');
-    findPrivacyBtn.id = 'findPrivacy';
-    findPrivacyBtn.textContent = 'Find Privacy Policy';
-    findPrivacyBtn.style.marginBottom = '10px';
-    container.insertBefore(findPrivacyBtn, chatBox);
+    let currentPrivacyPolicy = null;
+    let currentTab = null;
 
-    // Add click handler
-    findPrivacyBtn.addEventListener('click', async () => {
-      try {
-        const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
+    function showStatus(message, type = 'info') {
+        statusDiv.textContent = message;
+        statusDiv.className = type;
+    }
+
+    function showLoading(show) {
+        loadingDiv.style.display = show ? 'flex' : 'none';
+        analyzeButton.disabled = show;
+        privacyButton.disabled = show;
+        extractButton.disabled = show;
+    }
+
+    function showAnalysisControls(show) {
+        analyzeButton.style.display = show ? 'block' : 'none';
+        analysisLevel.style.display = show ? 'block' : 'none';
+    }
+
+    function formatAnalysisResult(text) {
+        // Split into sections based on numbered headings
+        const sections = text.split(/(?=\d+\.)/);
         
-        const response = await chrome.tabs.sendMessage(tab.id, {
-          action: "findPrivacyPolicy"
+        // Process each section
+        const formattedSections = sections.map(section => {
+            // Skip empty sections
+            if (!section.trim()) return '';
+
+            // Convert numbered lists to HTML
+            section = section.replace(/^\d+\.\s+/gm, '<h1>') // Main headings
+                           .replace(/([A-Z\s&]{2,}:)/g, '<h2>$1</h2>') // Subheadings
+                           .replace(/(?:^|\n)[-•]\s+([^\n]+)/g, '<li>$1</li>') // List items
+                           .replace(/(<li>.*?<\/li>)/gs, '<ul>$1</ul>'); // Wrap lists
+
+            return section;
         });
 
-        if (response?.link) {
-          console.log('Navigating to:', response.link);
-          const newTab = await chrome.tabs.create({ url: response.link });
+        return `<div class="analysis-result">${formattedSections.join('')}</div>`;
+    }
 
-          // Wait for page load
-          chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
-            if (tabId === newTab.id && info.status === 'complete') {
-              chrome.tabs.onUpdated.removeListener(listener);
-              
-              setTimeout(async () => {
-                console.log('Extracting content...');
-                chrome.tabs.sendMessage(newTab.id, {
-                  action: "extractContent"
-                });
+    async function getPageContent(tabId) {
+        try {
+            const [{result}] = await chrome.scripting.executeScript({
+                target: { tabId },
+                func: () => {
+                    // Helper function to clean text
+                    function cleanText(text) {
+                        return text
+                            .replace(/\s+/g, ' ')
+                            .replace(/\n+/g, '\n')
+                            .trim();
+                    }
 
-                // After navigation, get content
-                const content = await chrome.tabs.sendMessage(newTab.id, {
-                  action: "getPrivacyContent"
-                });
+                    // Try to find the main content
+                    const selectors = [
+                        'main',
+                        'article',
+                        '.privacy-policy',
+                        '.privacy',
+                        '#privacy-policy',
+                        '#privacy',
+                        '.legal',
+                        '#legal',
+                        '.content',
+                        '.main-content',
+                        '#content',
+                        '#main-content',
+                        '.container',
+                        '#container',
+                        'body'
+                    ];
 
-                // Process in chunks
-                const chunks = chunkContent(content);
-                const summaries = [];
+                    for (const selector of selectors) {
+                        const elements = document.querySelectorAll(selector);
+                        for (const element of elements) {
+                            const text = cleanText(element.innerText);
+                            if (text.length > 500) {
+                                return text;
+                            }
+                        }
+                    }
 
-                // Show progress
-                const message = document.createElement('div');
-                message.textContent = `Processing ${chunks.length} sections...`;
-                chatBox.appendChild(message);
-
-                // Process each chunk
-                for (const chunk of chunks) {
-                  const summary = await summarizeChunk(chunk);
-                  summaries.push(summary);
+                    return cleanText(document.body.innerText);
                 }
-
-                // Display final summary
-                const finalSummary = summaries.join('\n\n');
-                const summaryElement = document.createElement('div');
-                summaryElement.textContent = finalSummary;
-                chatBox.appendChild(summaryElement);
-              }, 1000); // Small delay to ensure DOM is ready
-            }
-          });
+            });
+            return result;
+        } catch (error) {
+            console.error('Error getting page content:', error);
+            throw new Error('Failed to extract page content');
         }
-      } catch (error) {
-        console.error('Error:', error);
-      }
-    });
-  }
-
-  // Chat functionality
-  sendButton.addEventListener('click', async function() {
-    const userInput = document.getElementById('user-input').value;
-    if (userInput.trim() === '') return;
-
-    const chatBox = document.getElementById('chat-box');
-    
-    // Create user message element
-    const userMessage = document.createElement('div');
-    userMessage.textContent = 'You: ' + userInput;
-    userMessage.style.color = 'blue';
-    chatBox.appendChild(userMessage);
-
-    // Clear the input field
-    document.getElementById('user-input').value = '';
-
-    // Scroll to the bottom of the chat box
-    chatBox.scrollTop = chatBox.scrollHeight;
-
-    // Fetch response from Gemini API
-    try {
-      const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': 'AIzaSyDj--K6qjcy4MZ0Acc_hbUMGvcitMOUPTQ'
-        },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{
-              text: userInput
-            }]
-          }]
-        })
-      });
-
-      const data = await response.json();
-      const botResponse = data.candidates[0].content.parts[0].text;
-
-      // Create bot message element
-      const botMessage = document.createElement('div');
-      botMessage.textContent = 'Bot: ' + botResponse;
-      botMessage.style.color = 'green';
-      chatBox.appendChild(botMessage);
-
-      // Scroll to the bottom of the chat box
-      chatBox.scrollTop = chatBox.scrollHeight;
-    } catch (error) {
-      console.error('Error fetching response from Gemini API:', error);
-      const errorMessage = document.createElement('div');
-      errorMessage.textContent = 'Bot: Sorry, something went wrong.';
-      errorMessage.style.color = 'red';
-      chatBox.appendChild(errorMessage);
     }
-  });
-});
 
-// popup.js
-document.addEventListener('DOMContentLoaded', () => {
-  const findPrivacyBtn = document.getElementById('findPrivacy');
+    async function findPrivacyPolicy() {
+        try {
+            showLoading(true);
+            showStatus('Searching for privacy policy...', 'info');
+            outputDiv.textContent = '';
+            currentPrivacyPolicy = null;
+            showAnalysisControls(false);
 
-  findPrivacyBtn.addEventListener('click', async () => {
-    try {
-      const [tab] = await chrome.tabs.query({active: true, currentWindow: true});
-      
-      const response = await chrome.tabs.sendMessage(tab.id, {
-        action: "findPrivacyPolicy"
-      });
+            // Get the active tab
+            [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            if (!currentTab) {
+                throw new Error('Could not access the current tab');
+            }
 
-      if (response?.link) {
-        console.log('Navigating to:', response.link);
-        await chrome.tabs.create({ url: response.link });
-      }
-    } catch (error) {
-      console.error('Error:', error);
+            // Execute script to find privacy policy
+            const [{result}] = await chrome.scripting.executeScript({
+                target: { tabId: currentTab.id },
+                func: () => {
+                    const patterns = [
+                        'privacy policy',
+                        'privacy notice',
+                        'privacy statement',
+                        'data protection',
+                        'data privacy',
+                        'privacy',
+                        'gdpr',
+                        'ccpa'
+                    ];
+
+                    // First check if we're already on a privacy policy page
+                    const currentUrl = window.location.href.toLowerCase();
+                    const currentTitle = document.title.toLowerCase();
+                    
+                    if (patterns.some(p => currentUrl.includes(p) || currentTitle.includes(p))) {
+                        return {
+                            type: 'current_page'
+                        };
+                    }
+
+                    // Try to find a privacy policy link
+                    const links = Array.from(document.getElementsByTagName('a'));
+                    const privacyLinks = links.filter(link => {
+                        const text = (link.textContent || '').toLowerCase();
+                        const href = (link.href || '').toLowerCase();
+                        return patterns.some(pattern => text.includes(pattern) || href.includes(pattern));
+                    });
+
+                    if (privacyLinks.length > 0) {
+                        // Sort links by relevance
+                        privacyLinks.sort((a, b) => {
+                            const aText = a.textContent.toLowerCase();
+                            const bText = b.textContent.toLowerCase();
+                            const aScore = patterns.reduce((score, pattern) => 
+                                score + (aText.includes(pattern) ? 1 : 0), 0);
+                            const bScore = patterns.reduce((score, pattern) => 
+                                score + (bText.includes(pattern) ? 1 : 0), 0);
+                            return bScore - aScore;
+                        });
+
+                        return {
+                            type: 'link',
+                            url: privacyLinks[0].href,
+                            text: privacyLinks[0].textContent.trim()
+                        };
+                    }
+
+                    return { type: 'not_found' };
+                }
+            });
+
+            if (result.type === 'not_found') {
+                throw new Error('No privacy policy found on this page');
+            }
+
+            if (result.type === 'current_page') {
+                showStatus('Found privacy policy on current page', 'success');
+                currentPrivacyPolicy = await getPageContent(currentTab.id);
+                outputDiv.textContent = currentPrivacyPolicy;
+                showAnalysisControls(true);
+            } else if (result.type === 'link') {
+                showStatus(`Found privacy policy link. Loading content...`, 'info');
+                
+                // Update the current tab instead of creating a new one
+                await chrome.tabs.update(currentTab.id, { url: result.url });
+
+                // Wait for the page to load
+                await new Promise((resolve) => {
+                    chrome.tabs.onUpdated.addListener(function listener(tabId, info) {
+                        if (tabId === currentTab.id && info.status === 'complete') {
+                            chrome.tabs.onUpdated.removeListener(listener);
+                            resolve();
+                        }
+                    });
+                });
+
+                // Get the content after a short delay to ensure the page is fully loaded
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                currentPrivacyPolicy = await getPageContent(currentTab.id);
+
+                // Show the content and analysis controls
+                showStatus('Privacy policy content loaded', 'success');
+                outputDiv.textContent = currentPrivacyPolicy;
+                showAnalysisControls(true);
+            }
+
+        } catch (error) {
+            console.error('Error:', error);
+            showStatus(error.message || 'Failed to find privacy policy', 'error');
+            showAnalysisControls(false);
+        } finally {
+            showLoading(false);
+        }
     }
-  });
+
+    async function extractAllText() {
+        try {
+            showLoading(true);
+            showStatus('Extracting text...', 'info');
+            outputDiv.textContent = '';
+            currentPrivacyPolicy = null;
+            showAnalysisControls(false);
+
+            const content = await getPageContent(currentTab.id);
+            outputDiv.textContent = content;
+            showStatus('Text extracted successfully!', 'success');
+
+        } catch (error) {
+            console.error('Error:', error);
+            showStatus(error.message || 'Failed to extract text', 'error');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    async function analyzePrivacyPolicy() {
+        if (!currentPrivacyPolicy) {
+            showStatus('No privacy policy content to analyze', 'error');
+            return;
+        }
+
+        try {
+            showLoading(true);
+            showStatus('Analyzing privacy policy...', 'info');
+
+            // Send analysis request to background script
+            const response = await chrome.runtime.sendMessage({
+                action: 'analyzePrivacyPolicy',
+                text: currentPrivacyPolicy,
+                level: analysisLevel.value
+            });
+
+            if (!response.success) {
+                throw new Error(response.error || 'Failed to analyze privacy policy');
+            }
+
+            showStatus('Analysis complete!', 'success');
+            outputDiv.innerHTML = formatAnalysisResult(response.data.analysis);
+
+        } catch (error) {
+            console.error('Analysis failed:', error);
+            showStatus(error.message || 'Failed to analyze privacy policy', 'error');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    privacyButton.addEventListener('click', findPrivacyPolicy);
+    extractButton.addEventListener('click', extractAllText);
+    analyzeButton.addEventListener('click', analyzePrivacyPolicy);
 });
-
-// popup.js
-function chunkContent(text, size = 5000) {
-  const chunks = [];
-  for (let i = 0; i < text.length; i += size) {
-    chunks.push(text.slice(i, i + size));
-  }
-  return chunks;
-}
-
-// popup.js
-async function summarizeChunk(chunk) {
-  const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-goog-api-key': 'AIzaSyDj--K6qjcy4MZ0Acc_hbUMGvcitMOUPTQ'
-    },
-    body: JSON.stringify({
-      contents: [{
-        parts: [{
-          text: `Summarize this privacy policy text in key points:\n${chunk}`
-        }]
-      }]
-    })
-  });
-  
-  const data = await response.json();
-  return data.candidates[0].content.parts[0].text;
-}
